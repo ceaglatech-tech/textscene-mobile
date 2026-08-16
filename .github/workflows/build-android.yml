@@ -1,0 +1,57 @@
+name: Build TextScène Pro (.apk)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer Java (requis par Gradle/Android)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Installer les dépendances
+        run: npm install
+
+      - name: Copier le web (www) vers le projet Android natif
+        run: npx cap sync android
+
+      - name: Rendre gradlew exécutable
+        run: chmod +x android/gradlew
+
+      - name: Générer l'APK Android (debug)
+        run: cd android && ./gradlew assembleDebug --no-daemon
+
+      - name: Publier l'APK comme artefact du build
+        uses: actions/upload-artifact@v4
+        with:
+          name: TextScene-Pro-APK
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Publier/actualiser la Release téléchargeable
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-android
+          name: "TextScène Pro (Android) — dernière version"
+          body: |
+            APK Android généré automatiquement depuis le code source.
+          files: android/app/build/outputs/apk/debug/*.apk
+          make_latest: false
