@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>TextScène Pro — Live</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
+  #stage {
+    width:100%; height:100%; position:relative;
+    display:flex; align-items:center; justify-content:center;
+    background:#ffffff; transition: background 0.25s ease;
+  }
+  #textWrap {
+    max-width:88%; text-align:center; z-index:2;
+    padding: 4vh 2vw;
+  }
+  #liveText {
+    font-family:'Syne', sans-serif; font-weight:700;
+    font-size: 5vw; line-height:1.42; white-space:pre-wrap;
+    color:#111111; word-break:break-word;
+    transition: opacity var(--tms,400ms) ease, transform var(--tms,400ms) ease;
+  }
+  #blankCurtain {
+    position:fixed; inset:0; background:#000; z-index:50;
+    opacity:0; pointer-events:none; transition:opacity 0.25s ease;
+  }
+  #blankCurtain.on { opacity:1; }
+
+  /* transition states */
+  #liveText.t-hidden.fade { opacity:0; }
+  #liveText.t-hidden.slide { opacity:0; transform:translateY(30px); }
+  #liveText.t-hidden.zoom { opacity:0; transform:scale(0.85); }
+  #liveText.t-visible { opacity:1; transform:translateY(0) scale(1); }
+
+  #idleNote {
+    position:fixed; bottom:18px; right:22px; z-index:3;
+    font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.08em;
+    color:rgba(0,0,0,0.28); text-transform:uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="textWrap"><div id="liveText"></div></div>
+  <div id="idleNote">TextScène Pro</div>
+</div>
+<div id="blankCurtain"></div>
+
+<script>
+let currentAppearance = null;
+
+function applyBackground(app) {
+  const stage = document.getElementById('stage');
+  if (!app) return;
+  if (app.bgType === 'gradient') {
+    stage.style.background = `linear-gradient(${app.gradAngle || 135}deg, ${app.gradFrom}, ${app.gradTo})`;
+  } else if (app.bgType === 'image' && app.bgImage) {
+    stage.style.background = `#000 url("${app.bgImage}") center/cover no-repeat`;
+  } else {
+    stage.style.background = app.bgColor || '#ffffff';
+  }
+}
+
+function outlineShadow(color, size) {
+  if (!size || size <= 0) return 'none';
+  const s = [];
+  for (let a = 0; a < 360; a += 20) {
+    const r = a * Math.PI / 180;
+    const x = +(Math.cos(r) * size).toFixed(1);
+    const y = +(Math.sin(r) * size).toFixed(1);
+    s.push(`${x}px ${y}px 0 ${color}`);
+  }
+  return s.join(',');
+}
+
+function applyTextStyle(app) {
+  const el = document.getElementById('liveText');
+  el.style.color = app.textColor || '#111111';
+  el.style.textShadow = outlineShadow(app.outlineColor, app.outlineWidth);
+  el.style.fontFamily = app.fontFamily || "'Syne', sans-serif";
+  el.style.fontWeight = app.fontWeight || 700;
+  const scale = (app.fontSize || 100) / 100;
+  el.style.fontSize = (5 * scale) + 'vw';
+  el.style.setProperty('--tms', (app.transitionMs || 400) + 'ms');
+}
+
+function setText(text, app) {
+  const el = document.getElementById('liveText');
+  const transition = (app && app.transition) || 'fade';
+
+  if (transition === 'none') {
+    el.textContent = text || '';
+    el.className = 't-visible';
+    return;
+  }
+
+  el.className = 't-hidden ' + transition;
+  const ms = (app && app.transitionMs) || 400;
+  setTimeout(() => {
+    el.textContent = text || '';
+    requestAnimationFrame(() => {
+      el.className = 't-visible';
+    });
+  }, Math.min(ms, 260));
+}
+
+// Remplace le pont Electron (preloadLive.js/ipcRenderer) par un
+// BroadcastChannel : fonctionne aussi bien en overlay plein écran
+// (même app) que si cette page est ouverte séparément (autre onglet
+// sur le même appareil, ex. via un futur mode "second écran/cast").
+if ('BroadcastChannel' in window) {
+  const liveChannel = new BroadcastChannel('textscene-live');
+  liveChannel.onmessage = (ev) => {
+    const msg = ev.data;
+    if (!msg) return;
+    if (msg.type === 'render') {
+      const payload = msg.payload;
+      currentAppearance = payload.appearance || currentAppearance;
+      if (currentAppearance) { applyBackground(currentAppearance); applyTextStyle(currentAppearance); }
+      setText(payload.text, currentAppearance);
+      document.getElementById('idleNote').style.display = payload.text ? 'none' : 'block';
+    } else if (msg.type === 'blank') {
+      document.getElementById('blankCurtain').classList.toggle('on', !!msg.isBlank);
+    }
+  };
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+	"appId": "com.hificreation.textscenepro",
+	"appName": "TextScène Pro",
+	"webDir": "www",
+	"android": {
+		"allowMixedContent": true
+	},
+	"server": {
+		"androidScheme": "https"
+	}
+}

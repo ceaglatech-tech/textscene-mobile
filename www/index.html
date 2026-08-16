@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TextScène Pro — Console</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<script src="js/pdf.min.js"></script>
+<script>if (window.pdfjsLib) { pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/pdf.worker.min.js'; }</script>
+<script src="js/rhapsodyParser.js"></script>
+<script src="js/api-shim.js"></script>
+<style>
+#liveOverlay { display:none; position:fixed; inset:0; z-index:9999; background:#000; }
+#liveOverlay.open { display:block; }
+#liveOverlay iframe { width:100%; height:100%; border:0; }
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+
+:root {
+  --bg:#0d0f13; --panel:#12151b; --panel2:#171b22; --panel3:#1c212a;
+  --border:#262b35; --border-soft:#1c212a;
+  --text:#e7e9ee; --text-dim:#a8afbc; --muted:#666e7d;
+  --accent:#4f7fff; --accent-soft:rgba(79,127,255,0.14); --accent-hover:#6b93ff;
+  --live:#22c55e; --live-soft:rgba(34,197,94,0.14);
+  --danger:#ef4444; --danger-soft:rgba(239,68,68,0.12);
+  --warn:#f59e0b;
+  --radius:10px;
+}
+html, body { height:100%; }
+body {
+  font-family:'Inter', sans-serif; background:var(--bg); color:var(--text);
+  display:flex; flex-direction:column; height:100vh; overflow:hidden; font-size:14px;
+}
+::-webkit-scrollbar { width:8px; height:8px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:8px; }
+::-webkit-scrollbar-thumb:hover { background:#333a48; }
+
+button { font-family:inherit; }
+input, textarea, select { font-family:inherit; }
+
+/* ── HEADER ── */
+header {
+  display:flex; align-items:center; gap:22px; padding:0 20px; height:56px;
+  background:var(--panel); border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.brand { display:flex; align-items:center; gap:9px; }
+.brand-mark {
+  width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,var(--accent),#8b5cf6);
+  display:flex; align-items:center; justify-content:center; font-family:'Syne',sans-serif; font-weight:800; font-size:14px; color:#fff;
+}
+.brand-name { font-family:'Syne',sans-serif; font-weight:800; font-size:15.5px; letter-spacing:-0.01em; }
+.brand-badge {
+  font-size:9.5px; font-weight:700; letter-spacing:0.08em; color:var(--accent);
+  border:1px solid var(--accent); border-radius:5px; padding:2px 6px; margin-left:2px;
+}
+
+nav.tabs { display:flex; gap:2px; background:var(--panel3); border-radius:9px; padding:3px; }
+nav.tabs button {
+  border:none; background:transparent; color:var(--muted); font-size:12.5px; font-weight:600;
+  padding:8px 16px; border-radius:7px; cursor:pointer; transition:all .15s; letter-spacing:0.01em;
+  display:flex; align-items:center; gap:6px;
+}
+nav.tabs button.active { background:var(--accent); color:#fff; }
+nav.tabs button:not(.active):hover { color:var(--text); background:var(--border-soft); }
+
+.header-spacer { flex:1; }
+
+.live-pill {
+  display:flex; align-items:center; gap:7px; padding:6px 12px; border-radius:20px;
+  border:1px solid var(--border); font-size:11.5px; font-weight:600; letter-spacing:0.03em; color:var(--muted);
+}
+.live-pill .dot { width:7px; height:7px; border-radius:50%; background:var(--muted); }
+.live-pill.on { border-color:rgba(34,197,94,0.35); color:var(--live); background:var(--live-soft); }
+.live-pill.on .dot { background:var(--live); animation:pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+/* ── LAYOUT ── */
+.page { display:none; flex:1; min-height:0; }
+.page.visible { display:flex; }
+
+/* ══ PROJECTION ══ */
+#pageProjection { }
+.sidebar {
+  width:290px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; min-height:0;
+}
+.sidebar-tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; }
+.sidebar-tab {
+  flex:1; padding:11px; text-align:center; font-size:11.5px; font-weight:700; letter-spacing:0.04em;
+  text-transform:uppercase; color:var(--muted); background:none; border:none; cursor:pointer;
+  border-bottom:2px solid transparent;
+}
+.sidebar-tab.active { color:var(--text); border-color:var(--accent); }
+.search-box { padding:12px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.search-box input {
+  width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg);
+  color:var(--text); font-size:12.5px; outline:none;
+}
+.search-box input:focus { border-color:var(--accent); }
+.chip-row { display:flex; gap:6px; padding:10px 14px; flex-wrap:wrap; border-bottom:1px solid var(--border); flex-shrink:0; }
+.chip {
+  font-size:11px; font-weight:600; padding:5px 11px; border-radius:14px; border:1px solid var(--border);
+  background:var(--panel2); color:var(--text-dim); cursor:pointer; white-space:nowrap;
+}
+.chip.active { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
+.chip.add { color:var(--muted); border-style:dashed; }
+.chip.folder-chip { display:inline-flex; align-items:center; gap:2px; padding:5px 6px 5px 11px; }
+.chip.folder-chip .folder-chip-label { cursor:pointer; }
+.chip.folder-chip .icon-btn { width:18px; height:18px; font-size:10px; }
+
+.list-scroll { flex:1; overflow-y:auto; padding:8px; }
+.doc-item {
+  display:flex; align-items:center; gap:10px; padding:10px 11px; border-radius:9px; cursor:pointer;
+  border:1px solid transparent; margin-bottom:3px; transition:all .12s;
+}
+.doc-item:hover { background:var(--panel2); }
+.doc-item.active { background:var(--accent-soft); border-color:rgba(79,127,255,0.3); }
+.doc-icon {
+  width:28px; height:28px; border-radius:7px; background:var(--panel3); display:flex; align-items:center;
+  justify-content:center; font-size:12px; flex-shrink:0; color:var(--muted);
+}
+.doc-item.active .doc-icon { background:var(--accent); color:#fff; }
+.doc-meta { flex:1; min-width:0; }
+.doc-name { font-size:12.5px; font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.doc-sub { font-size:10.5px; color:var(--muted); margin-top:1px; }
+.doc-actions { display:flex; gap:2px; opacity:0; transition:opacity .12s; }
+.doc-item:hover .doc-actions { opacity:1; }
+.icon-btn {
+  width:22px; height:22px; border-radius:6px; border:none; background:transparent; color:var(--muted);
+  cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px;
+}
+.icon-btn:hover { background:var(--border); color:var(--text); }
+.icon-btn.danger:hover { background:var(--danger-soft); color:var(--danger); }
+
+.empty-hint { text-align:center; color:var(--muted); font-size:12px; padding:30px 16px; line-height:1.9; }
+
+.sidebar-footer { padding:12px; border-top:1px solid var(--border); flex-shrink:0; }
+.btn-block {
+  width:100%; padding:11px; border-radius:9px; border:1px dashed var(--border); background:transparent;
+  color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; transition:all .15s;
+}
+.btn-block:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+
+.playlist-block { border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden; }
+.playlist-hdr { display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--panel2); cursor:pointer; }
+.playlist-hdr b { flex:1; font-size:12.5px; }
+.playlist-hdr .doc-sub { margin:0; }
+.playlist-body { padding:6px; display:none; }
+.playlist-body.open { display:block; }
+.pl-item { display:flex; align-items:center; gap:6px; padding:7px 8px; border-radius:7px; font-size:12px; }
+.pl-item:hover { background:var(--panel2); }
+.pl-item .n { color:var(--muted); font-size:10.5px; width:16px; }
+.pl-item .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pl-add-row { display:flex; gap:6px; padding:8px; }
+.pl-add-row select { flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:7px; padding:6px 8px; font-size:11.5px; }
+
+/* ── CENTER (program preview) ── */
+.center-col { flex:1; display:flex; flex-direction:column; padding:26px 30px; gap:16px; min-width:0; overflow-y:auto; }
+.program-title { display:flex; align-items:baseline; gap:10px; }
+.program-title h2 { font-size:15px; font-weight:700; }
+.program-title span { font-size:11.5px; color:var(--muted); }
+
+.preview-frame {
+  width:100%; aspect-ratio:16/9; border-radius:14px; border:1px solid var(--border);
+  position:relative; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.35); flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; background:#fff;
+}
+.preview-frame .ptext {
+  max-width:86%; text-align:center; white-space:pre-wrap; word-break:break-word; z-index:1;
+  font-family:'Syne',sans-serif; font-weight:700; font-size:clamp(14px,2.6vw,34px); line-height:1.45; color:#111;
+}
+.preview-frame .pempty { color:#9098a8; font-size:12.5px; text-align:center; z-index:1; }
+.preview-badge {
+  position:absolute; top:10px; left:12px; font-size:9.5px; font-weight:700; letter-spacing:0.08em;
+  color:rgba(0,0,0,0.35); z-index:2;
+}
+
+.transport { display:flex; align-items:center; justify-content:center; gap:18px; flex-shrink:0; }
+.nav-btn {
+  width:50px; height:50px; border-radius:12px; border:1px solid var(--border); background:var(--panel);
+  color:var(--text); font-size:1.15rem; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:all .15s;
+}
+.nav-btn:hover:not(:disabled) { background:var(--accent); border-color:var(--accent); color:#fff; }
+.nav-btn:disabled { opacity:0.25; cursor:not-allowed; }
+.transport .counter { font-size:13px; color:var(--muted); min-width:90px; text-align:center; }
+.transport .counter strong { color:var(--accent); font-size:15px; }
+
+.progress-wrap { width:100%; height:4px; background:var(--border); border-radius:10px; overflow:hidden; flex-shrink:0; }
+.progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),#8b5cf6); width:0%; transition:width .25s ease; }
+
+.kbd-row { display:flex; justify-content:center; gap:16px; font-size:11px; color:var(--muted); flex-shrink:0; }
+kbd { display:inline-block; padding:2px 7px; border:1px solid var(--border); border-radius:5px; background:var(--panel2); color:var(--text-dim); margin-right:5px; font-size:10.5px; }
+
+/* ── RIGHT (live output panel) ── */
+.live-col { width:320px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--border); padding:20px; display:flex; flex-direction:column; gap:18px; overflow-y:auto; }
+.panel-title { font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); }
+.live-mini {
+  width:100%; aspect-ratio:16/9; border-radius:11px; border:1px solid var(--border); position:relative; overflow:hidden;
+  display:flex; align-items:center; justify-content:center; background:#fff;
+}
+.live-mini .mtext { max-width:88%; text-align:center; white-space:pre-wrap; word-break:break-word; font-family:'Syne',sans-serif; font-weight:700; font-size:11px; line-height:1.4; color:#111; z-index:1; }
+.live-mini .mempty { font-size:10px; color:#9098a8; z-index:1; }
+.live-mini .mcurtain { position:absolute; inset:0; background:#000; z-index:2; display:none; }
+.live-mini .mcurtain.on { display:block; }
+
+.field-row { display:flex; flex-direction:column; gap:6px; }
+.field-label { font-size:11.5px; color:var(--text-dim); font-weight:600; }
+select.control-input, input.control-input {
+  width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--border); background:var(--bg);
+  color:var(--text); font-size:12.5px; outline:none;
+}
+select.control-input:focus, input.control-input:focus { border-color:var(--accent); }
+
+.btn { font-family:inherit; font-size:12px; font-weight:700; letter-spacing:0.02em; padding:10px 16px; border-radius:9px; border:none; cursor:pointer; transition:all .15s; }
+.btn-primary { background:var(--accent); color:#fff; }
+.btn-primary:hover { background:var(--accent-hover); }
+.btn-ghost { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+.btn-ghost:hover { border-color:var(--text-dim); }
+.btn-danger { background:var(--danger-soft); color:var(--danger); border:1px solid rgba(239,68,68,0.3); }
+.btn-danger:hover { background:rgba(239,68,68,0.2); }
+.btn-warn { background:rgba(245,158,11,0.14); color:var(--warn); border:1px solid rgba(245,158,11,0.3); }
+.btn-warn:hover { background:rgba(245,158,11,0.24); }
+.btn-full { width:100%; }
+.btn-row { display:flex; gap:8px; }
+.btn-row .btn { flex:1; }
+
+.toggle-row { display:flex; align-items:center; justify-content:space-between; padding:2px 0; }
+.toggle-row .field-label { font-weight:600; }
+.switch { position:relative; width:38px; height:22px; flex-shrink:0; }
+.switch input { opacity:0; width:0; height:0; }
+.switch .track { position:absolute; inset:0; background:var(--border); border-radius:20px; cursor:pointer; transition:.2s; }
+.switch .track::before { content:''; position:absolute; width:16px; height:16px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+.switch input:checked + .track { background:var(--accent); }
+.switch input:checked + .track::before { transform:translateX(16px); }
+
+.divider { height:1px; background:var(--border); }
+
+/* ══ RHAPSODIE / APPARENCE / RÉGLAGES (scrollable centered forms) ══ */
+.form-page { flex:1; overflow-y:auto; }
+.form-inner { max-width:920px; margin:0 auto; padding:30px 34px 60px; display:flex; flex-direction:column; gap:28px; }
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:28px; align-items:start; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:22px; display:flex; flex-direction:column; gap:16px; }
+.card-title { font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px; }
+.card-desc { font-size:12px; color:var(--muted); line-height:1.6; margin-top:-8px; }
+
+.status-line { display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:9px; border:1px solid var(--border); background:var(--bg); font-size:12.5px; }
+.status-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+.status-line.ok .status-dot { background:var(--live); }
+.status-line.warn .status-dot { background:var(--warn); }
+.status-line.err .status-dot { background:var(--danger); }
+
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+
+.swatch-wrap { display:flex; align-items:center; gap:9px; }
+.swatch { width:34px; height:34px; border-radius:8px; border:2px solid var(--border); cursor:pointer; position:relative; overflow:hidden; flex-shrink:0; }
+.swatch input[type="color"] { position:absolute; inset:-6px; width:calc(100% + 12px); height:calc(100% + 12px); opacity:0; cursor:pointer; }
+.hex-val { font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--muted); }
+
+.slider-wrap { display:flex; align-items:center; gap:10px; }
+input[type="range"] { -webkit-appearance:none; flex:1; height:4px; background:var(--border); border-radius:10px; outline:none; cursor:pointer; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:15px; height:15px; border-radius:50%; background:var(--accent); border:2px solid var(--bg); box-shadow:0 0 0 2px var(--accent); cursor:pointer; }
+.slider-val { font-size:11.5px; color:var(--accent); min-width:44px; text-align:right; font-family:'JetBrains Mono',monospace; }
+
+.seg { display:flex; background:var(--bg); border:1px solid var(--border); border-radius:9px; padding:3px; }
+.seg button { flex:1; border:none; background:none; color:var(--muted); font-size:11.5px; font-weight:600; padding:8px; border-radius:6px; cursor:pointer; }
+.seg button.active { background:var(--accent); color:#fff; }
+
+.bg-thumb { width:100%; height:150px; border-radius:10px; border:1px solid var(--border); position:relative; overflow:hidden; }
+.bg-thumb .fill { position:absolute; inset:0; }
+.bg-thumb .lbl { position:absolute; bottom:8px; left:10px; font-size:14px; font-weight:700; z-index:1; color:#111; font-family:'Syne',sans-serif; }
+
+.search-results { display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto; }
+.rh-result { padding:10px 12px; border-radius:8px; border:1px solid var(--border); cursor:pointer; font-size:12px; }
+.rh-result:hover { border-color:var(--accent); background:var(--accent-soft); }
+.rh-result .rr-date { color:var(--accent); font-weight:700; font-size:10.5px; }
+.rh-result .rr-title { font-weight:600; margin-top:2px; }
+.rh-result .rr-verse { color:var(--muted); font-size:11px; margin-top:2px; font-style:italic; }
+
+/* ── MODAL ── */
+.overlay { position:fixed; inset:0; background:rgba(4,5,8,0.72); backdrop-filter:blur(4px); z-index:300; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .18s; }
+.overlay.open { opacity:1; pointer-events:all; }
+.modal { background:var(--panel2); border:1px solid var(--border); border-radius:16px; padding:26px; width:560px; max-width:92vw; display:flex; flex-direction:column; gap:16px; transform:translateY(10px); transition:transform .18s; box-shadow:0 40px 100px rgba(0,0,0,0.55); }
+.overlay.open .modal { transform:translateY(0); }
+.modal-hdr { display:flex; align-items:center; justify-content:space-between; }
+.modal-title { font-size:14.5px; font-weight:700; }
+.modal-close { background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:2px 6px; border-radius:6px; }
+.modal-close:hover { color:var(--text); background:var(--border); }
+.modal input[type="text"], .modal textarea, .modal select { width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:13px; outline:none; }
+.modal input[type="text"]:focus, .modal textarea:focus, .modal select:focus { border-color:var(--accent); }
+.modal textarea { height:220px; resize:vertical; line-height:1.6; font-family:'JetBrains Mono',monospace; font-size:12.5px; }
+.modal-hint { font-size:11.5px; color:var(--muted); line-height:1.7; }
+.modal-hint code { background:var(--border); padding:1px 6px; border-radius:4px; color:var(--accent); }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+.toast {
+  position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(20px); z-index:400;
+  background:var(--panel3); border:1px solid var(--border); color:var(--text); padding:11px 20px; border-radius:10px;
+  font-size:12.5px; opacity:0; pointer-events:none; transition:all .2s; box-shadow:0 10px 30px rgba(0,0,0,0.4);
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="liveOverlay"><iframe id="liveFrame" src="live.html"></iframe></div>
+<script>
+  // Sur mobile il n'y a qu'un écran : le mode "Live" affiche cette
+  // vue de projection en plein écran par-dessus la console.
+  document.addEventListener('ts:live-open', () => {
+    document.getElementById('liveOverlay').classList.add('open');
+  });
+  document.addEventListener('ts:live-close', () => {
+    document.getElementById('liveOverlay').classList.remove('open');
+  });
+  // Tap à 3 doigts (ou double-tap rapide) sur l'overlay pour revenir
+  // à la console pendant une projection.
+  document.getElementById('liveOverlay').addEventListener('dblclick', () => {
+    window.api.live.close();
+  });
+</script>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">T</div>
+    <div class="brand-name">TextScène</div>
+    <div class="brand-badge">PRO</div>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="projection">⬛ Projection</button>
+    <button class="tab" data-tab="rhapsodie">📖 Rhapsodie</button>
+    <button class="tab" data-tab="apparence">🎨 Apparence</button>
+    <button class="tab" data-tab="reglages">⚙ Réglages</button>
+  </nav>
+  <div class="header-spacer"></div>
+  <div class="live-pill" id="livePill"><span class="dot"></span><span id="livePillText">Sortie fermée</span></div>
+</header>
+
+<!-- ══ PROJECTION ══ -->
+<div id="pageProjection" class="page visible">
+  <aside class="sidebar">
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab active" id="sbTabDocs" onclick="setLibraryView('documents')">Documents</button>
+      <button class="sidebar-tab" id="sbTabPlaylists" onclick="setLibraryView('playlists')">Playlists</button>
+    </div>
+    <div class="search-box"><input type="text" id="librarySearch" placeholder="Rechercher…" oninput="onLibrarySearch(this.value)"></div>
+    <div class="chip-row" id="folderChips"></div>
+    <div class="list-scroll" id="libraryList"></div>
+    <div class="sidebar-footer">
+      <button class="btn-block" id="sidebarAddBtn" onclick="onSidebarAdd()">＋ Nouveau document</button>
+    </div>
+  </aside>
+
+  <div class="center-col">
+    <div class="program-title">
+      <h2 id="programName">Aucune sélection</h2>
+      <span id="programSub"></span>
+    </div>
+
+    <div class="preview-frame" id="previewFrame">
+      <div class="preview-badge">APERÇU PROGRAMME</div>
+      <div class="pempty" id="previewEmpty">📄 Choisissez un document ou une playlist à gauche<br>pour commencer la projection.</div>
+      <div class="ptext" id="previewText" style="display:none"></div>
+    </div>
+
+    <div class="progress-wrap"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="transport">
+      <button class="nav-btn" id="btnPrev" onclick="prevPhase()" disabled>◀</button>
+      <div class="counter" id="counter">— / —</div>
+      <button class="nav-btn" id="btnNext" onclick="nextPhase()" disabled>▶</button>
+    </div>
+
+    <div class="kbd-row">
+      <span><kbd>←</kbd>Précédent</span>
+      <span><kbd>→</kbd>Suivant</span>
+      <span><kbd>B</kbd>Écran noir</span>
+    </div>
+  </div>
+
+  <aside class="live-col">
+    <div class="panel-title">Sortie live</div>
+    <div class="live-mini" id="liveMini">
+      <div class="mcurtain" id="miniCurtain"></div>
+      <div class="mempty" id="miniEmpty">En attente</div>
+      <div class="mtext" id="miniText" style="display:none"></div>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">Écran de sortie</span>
+      <select class="control-input" id="displaySelect" onchange="onDisplayChange(this.value)"></select>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnLiveToggle" onclick="toggleLiveWindow()">Ouvrir la fenêtre live</button>
+    </div>
+
+    <div class="toggle-row">
+      <span class="field-label">Envoi automatique</span>
+      <label class="switch"><input type="checkbox" id="autoSendToggle" checked onchange="onAutoSendToggle(this.checked)"><span class="track"></span></label>
+    </div>
+
+    <button class="btn btn-warn btn-full" id="btnBlank" onclick="toggleBlank()">◼ Écran noir</button>
+
+    <div class="divider"></div>
+    <div class="panel-title">Raccourci apparence</div>
+    <div style="font-size:11.5px;color:var(--muted);line-height:1.7">Fond, couleurs, police et transitions se règlent dans l'onglet <strong style="color:var(--text-dim)">Apparence</strong>.</div>
+  </aside>
+</div>
+
+<!-- ══ RHAPSODIE ══ -->
+<div id="pageRhapsodie" class="page form-page">
+  <div class="form-inner">
+    <div class="card">
+      <div class="card-title">📖 Rhapsodie des Réalités — récupération automatique</div>
+      <div class="card-desc">Importez le PDF mensuel une seule fois. TextScène détecte la langue (français / anglais), reconnaît chaque jour automatiquement, et prépare la diapositive du jour à chaque ouverture.</div>
+      <div class="status-line" id="rhStatus"><span class="status-dot" id="rhStatusDot"></span><span id="rhStatusText">Vérification…</span></div>
+      <div class="grid2">
+        <div class="field-row">
+          <span class="field-label">Langue du PDF</span>
+          <select class="control-input" id="rhLangSelect">
+            <option value="">Détection automatique</option>
+            <option value="fr">Français</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <div class="field-row" style="justify-content:flex-end">
+          <span class="field-label">&nbsp;</span>
+          <button class="btn btn-primary" onclick="importRhapsodyPdf()">＋ Importer le PDF du mois</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="rhBrowseCard" style="display:none">
+      <div class="card-title">🗓 Parcourir le mois</div>
+      <div class="grid2">
+        <div class="field-row">
+          <span class="field-label">Jour</span>
+          <select class="control-input" id="rhDaySelect" onchange="onRhDaySelected()"></select>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Phrases par diapositive</span>
+          <div class="slider-wrap">
+            <input type="range" id="rhPerPhase" min="1" max="4" value="2" step="1" oninput="onRhPerPhaseChange(this)">
+            <span class="slider-val" id="rhPerPhaseVal">2</span>
+          </div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="toggle-row"><span class="field-label">Inclure le titre</span><label class="switch"><input type="checkbox" id="rhIncludeTitle" checked onchange="onRhOptionsChange()"><span class="track"></span></label></div>
+        <div class="toggle-row"><span class="field-label">Inclure la prière</span><label class="switch"><input type="checkbox" id="rhIncludePrayer" checked onchange="onRhOptionsChange()"><span class="track"></span></label></div>
+      </div>
+      <div class="status-line" id="rhPreview" style="flex-direction:column;align-items:flex-start;gap:6px"></div>
+      <button class="btn btn-primary btn-full" onclick="sendRhapsodyToProjection()">▶ Envoyer ce jour à la projection</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔎 Rechercher dans la Rhapsodie</div>
+      <div class="card-desc">Recherche en texte intégral sur tous les mois déjà importés (titre, verset, texte, prière, étude).</div>
+      <input type="text" class="control-input" id="rhSearchInput" placeholder="Ex : foi, guérison, prospérité…" oninput="onRhSearch(this.value)">
+      <div class="search-results" id="rhSearchResults"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🗂 Mois importés</div>
+      <div id="rhMonthList" style="font-size:12px;color:var(--muted)">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ APPARENCE ══ -->
+<div id="pageApparence" class="page form-page">
+  <div class="form-inner">
+    <div class="two-col">
+      <div style="display:flex;flex-direction:column;gap:22px">
+
+        <div class="card">
+          <div class="card-title">🖼 Fond de l'écran</div>
+          <div class="seg" id="bgTypeSeg">
+            <button data-v="solid">Solide</button>
+            <button data-v="gradient">Dégradé</button>
+            <button data-v="image">Image</button>
+          </div>
+
+          <div id="bgSolidCtrl" class="field-row">
+            <span class="field-label">Couleur</span>
+            <div class="swatch-wrap"><div class="swatch" id="swBgColor"><input type="color" id="inBgColor" oninput="onAppChange()"></div><span class="hex-val" id="hexBgColor"></span></div>
+          </div>
+
+          <div id="bgGradCtrl" style="display:none">
+            <div class="grid2">
+              <div class="field-row"><span class="field-label">Couleur 1</span><div class="swatch-wrap"><div class="swatch" id="swGradFrom"><input type="color" id="inGradFrom" oninput="onAppChange()"></div><span class="hex-val" id="hexGradFrom"></span></div></div>
+              <div class="field-row"><span class="field-label">Couleur 2</span><div class="swatch-wrap"><div class="swatch" id="swGradTo"><input type="color" id="inGradTo" oninput="onAppChange()"></div><span class="hex-val" id="hexGradTo"></span></div></div>
+            </div>
+            <div class="field-row"><span class="field-label">Angle</span><div class="slider-wrap"><input type="range" id="inGradAngle" min="0" max="360" step="5" oninput="onAppChange()"><span class="slider-val" id="valGradAngle">135°</span></div></div>
+          </div>
+
+          <div id="bgImageCtrl" style="display:none">
+            <div class="bg-thumb" id="bgImageThumb"><div class="fill" id="bgImageFill" style="background:var(--panel3)"></div></div>
+            <div class="btn-row" style="margin-top:10px">
+              <button class="btn btn-ghost" style="flex:1" onclick="pickBgImage()">Choisir une image…</button>
+              <button class="btn btn-danger" onclick="clearBgImage()">Retirer</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🔤 Texte</div>
+          <div class="grid2">
+            <div class="field-row"><span class="field-label">Couleur du texte</span><div class="swatch-wrap"><div class="swatch" id="swTextColor"><input type="color" id="inTextColor" oninput="onAppChange()"></div><span class="hex-val" id="hexTextColor"></span></div></div>
+            <div class="field-row"><span class="field-label">Police</span>
+              <select class="control-input" id="inFontFamily" onchange="onAppChange()">
+                <option value="'Syne', sans-serif">Syne (moderne)</option>
+                <option value="'Inter', sans-serif">Inter (sobre)</option>
+                <option value="Georgia, serif">Georgia (classique)</option>
+                <option value="'Times New Roman', serif">Times New Roman</option>
+                <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field-row"><span class="field-label">Taille du texte</span><div class="slider-wrap"><input type="range" id="inFontSize" min="50" max="180" step="5" oninput="onAppChange()"><span class="slider-val" id="valFontSize">100%</span></div></div>
+            <div class="field-row"><span class="field-label">Graisse</span>
+              <select class="control-input" id="inFontWeight" onchange="onAppChange()">
+                <option value="400">Normale</option>
+                <option value="600">Semi-gras</option>
+                <option value="700">Gras</option>
+                <option value="800">Extra-gras</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">✏ Contour du texte</div>
+          <div class="grid2">
+            <div class="field-row"><span class="field-label">Couleur du contour</span><div class="swatch-wrap"><div class="swatch" id="swOutColor"><input type="color" id="inOutColor" oninput="onAppChange()"></div><span class="hex-val" id="hexOutColor"></span></div></div>
+            <div class="field-row"><span class="field-label">Épaisseur</span><div class="slider-wrap"><input type="range" id="inOutWidth" min="0" max="8" step="0.5" oninput="onAppChange()"><span class="slider-val" id="valOutWidth">0px</span></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🎞 Transition entre diapositives</div>
+          <div class="grid2">
+            <div class="field-row"><span class="field-label">Type</span>
+              <select class="control-input" id="inTransition" onchange="onAppChange()">
+                <option value="none">Aucune</option>
+                <option value="fade">Fondu</option>
+                <option value="slide">Glissement</option>
+                <option value="zoom">Zoom</option>
+              </select>
+            </div>
+            <div class="field-row"><span class="field-label">Durée</span><div class="slider-wrap"><input type="range" id="inTransitionMs" min="100" max="1200" step="50" oninput="onAppChange()"><span class="slider-val" id="valTransitionMs">400ms</span></div></div>
+          </div>
+        </div>
+
+        <button class="btn btn-ghost" onclick="resetAppearance()">↺ Réinitialiser l'apparence</button>
+      </div>
+
+      <div style="position:sticky;top:0">
+        <div class="card">
+          <div class="card-title">Aperçu en direct</div>
+          <div class="preview-frame" id="appPreviewFrame" style="aspect-ratio:16/9">
+            <div class="ptext" id="appPreviewText">Ainsi parle l'Éternel : « Ne crains rien, car je suis avec toi ! »</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ RÉGLAGES ══ -->
+<div id="pageReglages" class="page form-page">
+  <div class="form-inner">
+    <div class="card">
+      <div class="card-title">🖥 Écran de sortie</div>
+      <div class="card-desc">TextScène ouvre automatiquement la sortie live en plein écran sur un second moniteur si disponible.</div>
+      <div class="field-row">
+        <span class="field-label">Moniteur cible</span>
+        <select class="control-input" id="settingsDisplaySelect" onchange="onSettingsDisplayChange(this.value)"></select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="toggleLiveWindow()" id="btnLiveToggle2">Ouvrir la fenêtre live</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💾 Sauvegarde &amp; restauration</div>
+      <div class="card-desc">Exportez votre bibliothèque (dossiers, documents, playlists) et vos réglages d'apparence dans un fichier, pour les transférer sur un autre ordinateur.</div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" style="flex:1" onclick="backupExport()">⬇ Exporter une sauvegarde</button>
+        <button class="btn btn-ghost" style="flex:1" onclick="backupImport()">⬆ Importer une sauvegarde</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">ℹ À propos</div>
+      <div style="font-size:12.5px;color:var(--muted);line-height:1.9">
+        <strong style="color:var(--text)">TextScène Pro</strong> — Présentateur de texte professionnel<br>
+        Version 2.0.0 · HiFi Création — L'excellence, notre nature.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL : document -->
+<div class="overlay" id="docOverlay" onclick="overlayClick(event,'docOverlay')">
+  <div class="modal">
+    <div class="modal-hdr"><span class="modal-title" id="docModalTitle">Nouveau document</span><button class="modal-close" onclick="closeModal('docOverlay')">✕</button></div>
+    <input type="text" id="docName" placeholder="Nom du document (ex : Discours d'introduction)">
+    <select id="docFolder"></select>
+    <textarea id="docContent" placeholder="Saisissez votre texte...
+
+Séparez chaque phase par une ligne vide.
+
+Exemple :
+Bienvenue à cette présentation.
+
+Voici le plan du jour.
+
+Merci pour votre attention !"></textarea>
+    <div class="modal-hint">Chaque <strong>paragraphe séparé par une ligne vide</strong> devient une diapositive à l'écran.</div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('docOverlay')">Annuler</button><button class="btn btn-primary" onclick="saveDocModal()">Enregistrer</button></div>
+  </div>
+</div>
+
+<!-- MODAL : dossier -->
+<div class="overlay" id="folderOverlay" onclick="overlayClick(event,'folderOverlay')">
+  <div class="modal" style="width:400px">
+    <div class="modal-hdr"><span class="modal-title" id="folderModalTitle">Nouveau dossier</span><button class="modal-close" onclick="closeModal('folderOverlay')">✕</button></div>
+    <input type="text" id="folderName" placeholder="Nom du dossier">
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('folderOverlay')">Annuler</button><button class="btn btn-primary" onclick="saveFolderModal()" id="folderModalSaveBtn">Créer</button></div>
+  </div>
+</div>
+
+<!-- MODAL : playlist -->
+<div class="overlay" id="playlistOverlay" onclick="overlayClick(event,'playlistOverlay')">
+  <div class="modal" style="width:400px">
+    <div class="modal-hdr"><span class="modal-title">Nouvelle playlist</span><button class="modal-close" onclick="closeModal('playlistOverlay')">✕</button></div>
+    <input type="text" id="playlistName" placeholder="Nom de la playlist">
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('playlistOverlay')">Annuler</button><button class="btn btn-primary" onclick="savePlaylistModal()">Créer</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════
+   ÉTAT GLOBAL
+══════════════════════════════════ */
+let library = { folders: [], documents: [], playlists: [] };
+let settings = null;
+
+let ui = {
+  activeTab: 'projection',
+  libraryView: 'documents',
+  selectedFolderId: null,
+  searchQuery: '',
+  activeSourceType: null,   // 'doc' | 'playlist' | 'rhapsody'
+  activeSourceId: null,
+  activeSourceName: '',
+  program: [],               // [{text, docName}]
+  phaseIndex: 0,
+  liveOpen: false,
+  liveBlank: false,
+  autoSend: true,
+  displays: [],
+};
+
+let rh = { monthData: null, selectedDate: null, months: [] };
+
+const RH_WEEKDAYS_FR = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+const RH_MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+/* ══════════════════════════════════
+   INIT
+══════════════════════════════════ */
+async function init() {
+  library = await window.api.library.getAll();
+  settings = await window.api.settings.get();
+
+  wireTabs();
+  wireBgSeg();
+  renderFolderChips();
+  renderLibraryList();
+  populateFolderSelect();
+  applyAppearanceFormFromSettings();
+  updateProgramUI();
+
+  await refreshDisplays();
+  await refreshLiveStatus();
+  window.api.live.onClosed(() => { ui.liveOpen = false; refreshLiveStatusUI(); });
+
+  await refreshRhStatus();
+
+  document.addEventListener('keydown', onKeydown);
+  setInterval(refreshLiveStatus, 4000);
+}
+
+function wireTabs() {
+  document.querySelectorAll('nav.tabs button').forEach(btn => {
+    btn.addEventListener('click', () => showTab(btn.dataset.tab));
+  });
+}
+
+function showTab(name) {
+  ui.activeTab = name;
+  document.getElementById('pageProjection').classList.toggle('visible', name === 'projection');
+  document.getElementById('pageRhapsodie').classList.toggle('visible', name === 'rhapsodie');
+  document.getElementById('pageApparence').classList.toggle('visible', name === 'apparence');
+  document.getElementById('pageReglages').classList.toggle('visible', name === 'reglages');
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+}
+
+function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._h);
+  toast._h = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ══════════════════════════════════
+   BIBLIOTHÈQUE — rendu
+══════════════════════════════════ */
+function setLibraryView(view) {
+  ui.libraryView = view;
+  document.getElementById('sbTabDocs').classList.toggle('active', view === 'documents');
+  document.getElementById('sbTabPlaylists').classList.toggle('active', view === 'playlists');
+  document.getElementById('sidebarAddBtn').textContent = view === 'documents' ? '＋ Nouveau document' : '＋ Nouvelle playlist';
+  renderFolderChips();
+  renderLibraryList();
+}
+
+function onSidebarAdd() {
+  if (ui.libraryView === 'documents') openDocModal(null);
+  else openPlaylistModal();
+}
+
+function onLibrarySearch(q) {
+  ui.searchQuery = q.trim().toLowerCase();
+  renderLibraryList();
+}
+
+function renderFolderChips() {
+  const wrap = document.getElementById('folderChips');
+  if (ui.libraryView === 'playlists') { wrap.innerHTML = ''; return; }
+  let html = `<button class="chip ${ui.selectedFolderId === null ? 'active' : ''}" onclick="selectFolderChip(null)">Tous</button>`;
+  library.folders.forEach(f => {
+    html += `<span class="chip folder-chip ${ui.selectedFolderId === f.id ? 'active' : ''}">
+      <span class="folder-chip-label" onclick="selectFolderChip('${f.id}')">${esc(f.name)}</span>
+      <button class="icon-btn" title="Renommer" onclick="event.stopPropagation();openFolderModal('${f.id}')">✎</button>
+      <button class="icon-btn danger" title="Supprimer" onclick="event.stopPropagation();deleteFolder('${f.id}')">✕</button>
+    </span>`;
+  });
+  html += `<button class="chip add" onclick="openFolderModal()">＋ Dossier</button>`;
+  wrap.innerHTML = html;
+}
+function selectFolderChip(id) { ui.selectedFolderId = id; renderFolderChips(); renderLibraryList(); }
+
+function docPhases(doc) {
+  return (doc.content || '').split(/\n[ \t]*\n/).map(p => p.trim()).filter(Boolean);
+}
+
+function renderLibraryList() {
+  const el = document.getElementById('libraryList');
+  if (ui.libraryView === 'documents') {
+    let docs = library.documents.slice();
+    if (ui.selectedFolderId !== null) docs = docs.filter(d => d.folderId === ui.selectedFolderId);
+    if (ui.searchQuery) docs = docs.filter(d => (d.name || '').toLowerCase().includes(ui.searchQuery) || (d.content || '').toLowerCase().includes(ui.searchQuery));
+    if (!docs.length) { el.innerHTML = `<div class="empty-hint">Aucun document · Ajoutez-en un ci-dessous</div>`; return; }
+    el.innerHTML = docs.map(d => {
+      const n = docPhases(d).length;
+      const active = ui.activeSourceType === 'doc' && ui.activeSourceId === d.id;
+      return `<div class="doc-item ${active ? 'active' : ''}" onclick="selectDoc('${d.id}')">
+        <div class="doc-icon">📄</div>
+        <div class="doc-meta"><div class="doc-name">${esc(d.name)}</div><div class="doc-sub">${n} phase${n>1?'s':''}</div></div>
+        <div class="doc-actions">
+          <button class="icon-btn" title="Modifier" onclick="event.stopPropagation();openDocModal('${d.id}')">✎</button>
+          <button class="icon-btn danger" title="Supprimer" onclick="event.stopPropagation();deleteDoc('${d.id}')">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    let pls = library.playlists.slice();
+    if (ui.searchQuery) pls = pls.filter(p => (p.name || '').toLowerCase().includes(ui.searchQuery));
+    if (!pls.length) { el.innerHTML = `<div class="empty-hint">Aucune playlist · Créez-en une ci-dessous</div>`; return; }
+    el.innerHTML = pls.map(p => renderPlaylistBlock(p)).join('');
+  }
+}
+
+let openPlaylistId = null;
+function renderPlaylistBlock(p) {
+  const isOpen = openPlaylistId === p.id;
+  const active = ui.activeSourceType === 'playlist' && ui.activeSourceId === p.id;
+  const itemsHtml = p.items.map((docId, i) => {
+    const doc = library.documents.find(d => d.id === docId);
+    const name = doc ? doc.name : '(document supprimé)';
+    return `<div class="pl-item">
+      <span class="n">${i+1}</span><span class="name">${esc(name)}</span>
+      <button class="icon-btn" title="Monter" onclick="event.stopPropagation();movePlaylistItem('${p.id}',${i},-1)">↑</button>
+      <button class="icon-btn" title="Descendre" onclick="event.stopPropagation();movePlaylistItem('${p.id}',${i},1)">↓</button>
+      <button class="icon-btn danger" title="Retirer" onclick="event.stopPropagation();removePlaylistItem('${p.id}',${i})">✕</button>
+    </div>`;
+  }).join('');
+  const availableDocs = library.documents.filter(d => !p.items.includes(d.id));
+  const addRow = `<div class="pl-add-row">
+    <select id="plAdd-${p.id}"><option value="">＋ Ajouter un document…</option>${availableDocs.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select>
+    <button class="icon-btn" onclick="addToPlaylist('${p.id}')">＋</button>
+  </div>`;
+  return `<div class="playlist-block">
+    <div class="playlist-hdr" onclick="togglePlaylistOpen('${p.id}')">
+      <span style="color:var(--muted);font-size:11px">${isOpen ? '▾' : '▸'}</span>
+      <b>${esc(p.name)}</b>
+      <span class="doc-sub">${p.items.length} élément${p.items.length>1?'s':''}</span>
+      <button class="icon-btn" title="Lancer" onclick="event.stopPropagation();selectPlaylist('${p.id}')">▶</button>
+      <button class="icon-btn danger" title="Supprimer" onclick="event.stopPropagation();deletePlaylist('${p.id}')">✕</button>
+    </div>
+    <div class="playlist-body ${isOpen ? 'open' : ''}">${itemsHtml || '<div class="empty-hint" style="padding:14px">Playlist vide</div>'}${addRow}</div>
+  </div>`;
+}
+function togglePlaylistOpen(id) { openPlaylistId = openPlaylistId === id ? null : id; renderLibraryList(); }
+
+async function addToPlaylist(plId) {
+  const sel = document.getElementById('plAdd-' + plId);
+  const docId = sel.value;
+  if (!docId) return;
+  const p = library.playlists.find(x => x.id === plId);
+  const items = p.items.concat([docId]);
+  await window.api.library.updatePlaylist(plId, { items });
+  p.items = items;
+  renderLibraryList();
+  if (ui.activeSourceType === 'playlist' && ui.activeSourceId === plId) selectPlaylist(plId);
+}
+async function movePlaylistItem(plId, idx, dir) {
+  const p = library.playlists.find(x => x.id === plId);
+  const j = idx + dir;
+  if (j < 0 || j >= p.items.length) return;
+  [p.items[idx], p.items[j]] = [p.items[j], p.items[idx]];
+  await window.api.library.updatePlaylist(plId, { items: p.items });
+  renderLibraryList();
+  if (ui.activeSourceType === 'playlist' && ui.activeSourceId === plId) selectPlaylist(plId);
+}
+async function removePlaylistItem(plId, idx) {
+  const p = library.playlists.find(x => x.id === plId);
+  p.items.splice(idx, 1);
+  await window.api.library.updatePlaylist(plId, { items: p.items });
+  renderLibraryList();
+  if (ui.activeSourceType === 'playlist' && ui.activeSourceId === plId) selectPlaylist(plId);
+}
+async function deletePlaylist(id) {
+  await window.api.library.deletePlaylist(id);
+  library.playlists = library.playlists.filter(x => x.id !== id);
+  if (ui.activeSourceType === 'playlist' && ui.activeSourceId === id) clearProgram();
+  renderLibraryList();
+}
+
+/* ══════════════════════════════════
+   MODALS — document / dossier / playlist
+══════════════════════════════════ */
+function populateFolderSelect() {
+  const sel = document.getElementById('docFolder');
+  sel.innerHTML = `<option value="">Sans dossier</option>` + library.folders.map(f => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
+}
+let editingDocId = null;
+function openDocModal(id) {
+  editingDocId = id;
+  populateFolderSelect();
+  const doc = id ? library.documents.find(d => d.id === id) : null;
+  document.getElementById('docModalTitle').textContent = doc ? 'Modifier le document' : 'Nouveau document';
+  document.getElementById('docName').value = doc ? doc.name : '';
+  document.getElementById('docFolder').value = doc ? (doc.folderId || '') : (ui.selectedFolderId || '');
+  document.getElementById('docContent').value = doc ? doc.content : '';
+  document.getElementById('docOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('docName').focus(), 100);
+}
+async function saveDocModal() {
+  const name = document.getElementById('docName').value.trim() || 'Sans titre';
+  const content = document.getElementById('docContent').value;
+  const folderId = document.getElementById('docFolder').value || null;
+  if (!content.trim()) { const ta = document.getElementById('docContent'); ta.style.borderColor = 'var(--danger)'; ta.focus(); setTimeout(()=>ta.style.borderColor='',1200); return; }
+  if (editingDocId) {
+    const patch = { name, content, folderId };
+    await window.api.library.updateDoc(editingDocId, patch);
+    Object.assign(library.documents.find(d => d.id === editingDocId), patch);
+  } else {
+    const doc = await window.api.library.createDoc({ name, content, folderId });
+    library.documents.push(doc);
+  }
+  closeModal('docOverlay');
+  renderLibraryList();
+  toast('Document enregistré');
+}
+async function deleteDoc(id) {
+  await window.api.library.deleteDoc(id);
+  library.documents = library.documents.filter(d => d.id !== id);
+  library.playlists.forEach(p => p.items = p.items.filter(i => i !== id));
+  if (ui.activeSourceType === 'doc' && ui.activeSourceId === id) clearProgram();
+  renderLibraryList();
+}
+
+let editingFolderId = null;
+function openFolderModal(id) {
+  editingFolderId = id || null;
+  const f = id ? library.folders.find(x => x.id === id) : null;
+  document.getElementById('folderModalTitle').textContent = f ? 'Renommer le dossier' : 'Nouveau dossier';
+  document.getElementById('folderModalSaveBtn').textContent = f ? 'Renommer' : 'Créer';
+  document.getElementById('folderName').value = f ? f.name : '';
+  document.getElementById('folderOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('folderName').focus(),100);
+}
+async function saveFolderModal() {
+  const name = document.getElementById('folderName').value.trim();
+  if (!name) return;
+  if (editingFolderId) {
+    await window.api.library.renameFolder(editingFolderId, name);
+    const f = library.folders.find(x => x.id === editingFolderId);
+    if (f) f.name = name;
+    toast('Dossier renommé');
+  } else {
+    const f = await window.api.library.createFolder(name);
+    library.folders.push(f);
+  }
+  closeModal('folderOverlay');
+  renderFolderChips();
+  populateFolderSelect();
+}
+async function deleteFolder(id) {
+  await window.api.library.deleteFolder(id);
+  library.folders = library.folders.filter(x => x.id !== id);
+  library.documents.forEach(d => { if (d.folderId === id) d.folderId = null; });
+  if (ui.selectedFolderId === id) ui.selectedFolderId = null;
+  renderFolderChips();
+  renderLibraryList();
+  populateFolderSelect();
+  toast('Dossier supprimé (documents conservés, sans dossier)');
+}
+
+function openPlaylistModal() { document.getElementById('playlistName').value=''; document.getElementById('playlistOverlay').classList.add('open'); setTimeout(()=>document.getElementById('playlistName').focus(),100); }
+async function savePlaylistModal() {
+  const name = document.getElementById('playlistName').value.trim();
+  if (!name) return;
+  const p = await window.api.library.createPlaylist(name);
+  library.playlists.push(p);
+  closeModal('playlistOverlay');
+  renderLibraryList();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function overlayClick(e, id) { if (e.target === document.getElementById(id)) closeModal(id); }
+
+/* ══════════════════════════════════
+   PROGRAMME / NAVIGATION
+══════════════════════════════════ */
+function selectDoc(id) {
+  const doc = library.documents.find(d => d.id === id);
+  if (!doc) return;
+  ui.activeSourceType = 'doc'; ui.activeSourceId = id; ui.activeSourceName = doc.name;
+  ui.program = docPhases(doc).map(text => ({ text, docName: doc.name }));
+  ui.phaseIndex = 0;
+  renderLibraryList();
+  updateProgramUI();
+  pushLive();
+}
+function selectPlaylist(id) {
+  const p = library.playlists.find(x => x.id === id);
+  if (!p) return;
+  ui.activeSourceType = 'playlist'; ui.activeSourceId = id; ui.activeSourceName = p.name;
+  let combined = [];
+  p.items.forEach(docId => {
+    const doc = library.documents.find(d => d.id === docId);
+    if (!doc) return;
+    docPhases(doc).forEach(text => combined.push({ text, docName: doc.name }));
+  });
+  ui.program = combined;
+  ui.phaseIndex = 0;
+  renderLibraryList();
+  updateProgramUI();
+  pushLive();
+}
+function loadRhapsodyProgram(phases, name) {
+  ui.activeSourceType = 'rhapsody'; ui.activeSourceId = 'rhapsody'; ui.activeSourceName = name;
+  ui.program = phases.map(text => ({ text, docName: name }));
+  ui.phaseIndex = 0;
+  updateProgramUI();
+  pushLive();
+}
+function clearProgram() {
+  ui.activeSourceType = null; ui.activeSourceId = null; ui.program = []; ui.phaseIndex = 0;
+  updateProgramUI(); pushLive();
+}
+
+function updateProgramUI() {
+  const nameEl = document.getElementById('programName');
+  const subEl = document.getElementById('programSub');
+  const empty = document.getElementById('previewEmpty');
+  const text = document.getElementById('previewText');
+  const ctr = document.getElementById('counter');
+  const prev = document.getElementById('btnPrev');
+  const next = document.getElementById('btnNext');
+  const bar = document.getElementById('progressFill');
+  const total = ui.program.length;
+
+  nameEl.textContent = ui.activeSourceName || 'Aucune sélection';
+  subEl.textContent = total ? `${total} diapositive${total>1?'s':''}` : '';
+
+  if (!total) {
+    empty.style.display = ''; text.style.display = 'none';
+    ctr.innerHTML = '— / —'; prev.disabled = true; next.disabled = true; bar.style.width = '0%';
+  } else {
+    empty.style.display = 'none'; text.style.display = '';
+    const cur = ui.program[ui.phaseIndex];
+    text.textContent = cur.text;
+    ctr.innerHTML = `<strong>${ui.phaseIndex+1}</strong> / ${total}`;
+    prev.disabled = ui.phaseIndex === 0;
+    next.disabled = ui.phaseIndex === total - 1;
+    bar.style.width = total > 1 ? ((ui.phaseIndex/(total-1))*100)+'%' : '100%';
+  }
+  paintAppearance(document.getElementById('previewFrame'));
+  updateMiniPreview();
+}
+
+function nextPhase() { if (ui.phaseIndex < ui.program.length - 1) { ui.phaseIndex++; updateProgramUI(); pushLive(); } }
+function prevPhase() { if (ui.phaseIndex > 0) { ui.phaseIndex--; updateProgramUI(); pushLive(); } }
+
+function onKeydown(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); nextPhase(); }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); prevPhase(); }
+  if (e.key === 'b' || e.key === 'B') { e.preventDefault(); toggleBlank(); }
+}
+
+/* ══════════════════════════════════
+   APPARENCE — application visuelle
+══════════════════════════════════ */
+function outlineShadow(color, size) {
+  if (!size || size <= 0) return 'none';
+  const s = [];
+  for (let a = 0; a < 360; a += 20) {
+    const r = a * Math.PI / 180;
+    const x = (Math.cos(r) * size).toFixed(1);
+    const y = (Math.sin(r) * size).toFixed(1);
+    s.push(`${x}px ${y}px 0 ${color}`);
+  }
+  return s.join(',');
+}
+function backgroundCSS(app) {
+  if (app.bgType === 'gradient') return `linear-gradient(${app.gradAngle||135}deg, ${app.gradFrom}, ${app.gradTo})`;
+  if (app.bgType === 'image' && app.bgImage) return `#000 url("${app.bgImage}") center/cover no-repeat`;
+  return app.bgColor || '#ffffff';
+}
+function paintAppearance(frameEl) {
+  const app = settings.appearance;
+  frameEl.style.background = backgroundCSS(app);
+  const t = frameEl.querySelector('.ptext') || frameEl;
+  if (t) {
+    t.style.color = app.textColor;
+    t.style.textShadow = outlineShadow(app.outlineColor, app.outlineWidth);
+    t.style.fontFamily = app.fontFamily;
+    t.style.fontWeight = app.fontWeight;
+  }
+}
+function updateMiniPreview() {
+  const mini = document.getElementById('liveMini');
+  const app = settings.appearance;
+  mini.style.background = backgroundCSS(app);
+  const mtext = document.getElementById('miniText');
+  const mempty = document.getElementById('miniEmpty');
+  if (ui.program.length) {
+    mtext.style.display = ''; mempty.style.display = 'none';
+    mtext.textContent = ui.program[ui.phaseIndex].text;
+    mtext.style.color = app.textColor; mtext.style.fontFamily = app.fontFamily;
+  } else { mtext.style.display = 'none'; mempty.style.display = ''; }
+  document.getElementById('miniCurtain').classList.toggle('on', ui.liveBlank);
+}
+
+function applyAppearanceFormFromSettings() {
+  const app = settings.appearance;
+  document.querySelectorAll('#bgTypeSeg button').forEach(b => b.classList.toggle('active', b.dataset.v === app.bgType));
+  document.getElementById('bgSolidCtrl').style.display = app.bgType === 'solid' ? '' : 'none';
+  document.getElementById('bgGradCtrl').style.display = app.bgType === 'gradient' ? '' : 'none';
+  document.getElementById('bgImageCtrl').style.display = app.bgType === 'image' ? '' : 'none';
+
+  setColorField('inBgColor','swBgColor','hexBgColor', app.bgColor);
+  setColorField('inGradFrom','swGradFrom','hexGradFrom', app.gradFrom);
+  setColorField('inGradTo','swGradTo','hexGradTo', app.gradTo);
+  document.getElementById('inGradAngle').value = app.gradAngle;
+  document.getElementById('valGradAngle').textContent = app.gradAngle + '°';
+  document.getElementById('bgImageFill').style.background = app.bgImage ? `#000 url("${app.bgImage}") center/cover no-repeat` : 'var(--panel3)';
+
+  setColorField('inTextColor','swTextColor','hexTextColor', app.textColor);
+  document.getElementById('inFontFamily').value = app.fontFamily;
+  document.getElementById('inFontSize').value = app.fontSize;
+  document.getElementById('valFontSize').textContent = app.fontSize + '%';
+  document.getElementById('inFontWeight').value = String(app.fontWeight);
+
+  setColorField('inOutColor','swOutColor','hexOutColor', app.outlineColor);
+  document.getElementById('inOutWidth').value = app.outlineWidth;
+  document.getElementById('valOutWidth').textContent = app.outlineWidth + 'px';
+
+  document.getElementById('inTransition').value = app.transition;
+  document.getElementById('inTransitionMs').value = app.transitionMs;
+  document.getElementById('valTransitionMs').textContent = app.transitionMs + 'ms';
+
+  paintAppearance(document.getElementById('appPreviewFrame'));
+}
+function setColorField(inputId, swatchId, hexId, value) {
+  document.getElementById(inputId).value = value;
+  document.getElementById(swatchId).style.background = value;
+  document.getElementById(hexId).textContent = value;
+}
+
+function wireBgSeg() {
+  document.querySelectorAll('#bgTypeSeg button').forEach(b => {
+    b.addEventListener('click', () => { settings.appearance.bgType = b.dataset.v; onAppChange(); });
+  });
+}
+
+let appChangeTimer = null;
+function onAppChange() {
+  const app = settings.appearance;
+  app.bgColor = document.getElementById('inBgColor').value;
+  app.gradFrom = document.getElementById('inGradFrom').value;
+  app.gradTo = document.getElementById('inGradTo').value;
+  app.gradAngle = parseInt(document.getElementById('inGradAngle').value, 10);
+  app.textColor = document.getElementById('inTextColor').value;
+  app.fontFamily = document.getElementById('inFontFamily').value;
+  app.fontSize = parseInt(document.getElementById('inFontSize').value, 10);
+  app.fontWeight = parseInt(document.getElementById('inFontWeight').value, 10);
+  app.outlineColor = document.getElementById('inOutColor').value;
+  app.outlineWidth = parseFloat(document.getElementById('inOutWidth').value);
+  app.transition = document.getElementById('inTransition').value;
+  app.transitionMs = parseInt(document.getElementById('inTransitionMs').value, 10);
+
+  applyAppearanceFormFromSettings();
+  updateProgramUI();
+  clearTimeout(appChangeTimer);
+  appChangeTimer = setTimeout(async () => { settings = await window.api.settings.set(settings); pushLive(); }, 250);
+}
+
+async function pickBgImage() {
+  const res = await window.api.media.pickImage();
+  if (res.canceled) return;
+  settings.appearance.bgImage = res.url;
+  settings.appearance.bgType = 'image';
+  settings = await window.api.settings.set(settings);
+  applyAppearanceFormFromSettings();
+  updateProgramUI();
+  pushLive();
+}
+async function clearBgImage() {
+  settings.appearance.bgImage = null;
+  settings.appearance.bgType = 'solid';
+  settings = await window.api.settings.set(settings);
+  applyAppearanceFormFromSettings();
+  updateProgramUI();
+  pushLive();
+}
+async function resetAppearance() {
+  const s = await window.api.settings.set({
+    ...settings,
+    appearance: { bgType:'solid', bgColor:'#ffffff', gradFrom:'#1a1a2e', gradTo:'#16213e', gradAngle:135, bgImage:null,
+      textColor:'#111111', outlineColor:'#e8ff47', outlineWidth:0, fontFamily:"'Syne', sans-serif", fontSize:100, fontWeight:700,
+      transition:'fade', transitionMs:400 }
+  });
+  settings = s;
+  applyAppearanceFormFromSettings();
+  updateProgramUI();
+  pushLive();
+  toast('Apparence réinitialisée');
+}
+
+/* ══════════════════════════════════
+   SORTIE LIVE
+══════════════════════════════════ */
+async function refreshDisplays() {
+  ui.displays = await window.api.live.listDisplays();
+  const opts = ui.displays.map(d => `<option value="${d.id}">${esc(d.label)}</option>`).join('');
+  document.getElementById('displaySelect').innerHTML = opts;
+  document.getElementById('settingsDisplaySelect').innerHTML = opts;
+  const preferred = settings.liveDisplayId || (ui.displays.find(d => !d.isPrimary) || ui.displays[0] || {}).id;
+  if (preferred != null) {
+    document.getElementById('displaySelect').value = preferred;
+    document.getElementById('settingsDisplaySelect').value = preferred;
+  }
+}
+async function onDisplayChange(id) { await setPreferredDisplay(id); }
+async function onSettingsDisplayChange(id) { await setPreferredDisplay(id); document.getElementById('displaySelect').value = id; }
+async function setPreferredDisplay(id) {
+  settings.liveDisplayId = Number(id);
+  settings = await window.api.settings.set(settings);
+}
+
+async function refreshLiveStatus() {
+  ui.liveOpen = await window.api.live.isOpen();
+  refreshLiveStatusUI();
+}
+function refreshLiveStatusUI() {
+  const pill = document.getElementById('livePill');
+  pill.classList.toggle('on', ui.liveOpen);
+  document.getElementById('livePillText').textContent = ui.liveOpen ? 'Sortie en direct' : 'Sortie fermée';
+  const btn = document.getElementById('btnLiveToggle');
+  const btn2 = document.getElementById('btnLiveToggle2');
+  const label = ui.liveOpen ? 'Fermer la fenêtre live' : 'Ouvrir la fenêtre live';
+  if (btn) btn.textContent = label;
+  if (btn2) btn2.textContent = label;
+}
+async function toggleLiveWindow() {
+  if (ui.liveOpen) { await window.api.live.close(); ui.liveOpen = false; }
+  else { await window.api.live.open(settings.liveDisplayId); ui.liveOpen = true; pushLive(); }
+  refreshLiveStatusUI();
+}
+
+function onAutoSendToggle(v) { ui.autoSend = v; if (v) pushLive(); }
+
+function pushLive() {
+  updateMiniPreview();
+  if (!ui.liveOpen || !ui.autoSend) return;
+  const text = ui.program.length ? ui.program[ui.phaseIndex].text : '';
+  window.api.live.render({ text, appearance: settings.appearance });
+}
+async function toggleBlank() {
+  ui.liveBlank = !ui.liveBlank;
+  document.getElementById('btnBlank').textContent = ui.liveBlank ? '◼ Réafficher' : '◼ Écran noir';
+  document.getElementById('btnBlank').classList.toggle('btn-danger', ui.liveBlank);
+  updateMiniPreview();
+  if (ui.liveOpen) window.api.live.blank(ui.liveBlank);
+}
+
+/* ══════════════════════════════════
+   RHAPSODIE DES RÉALITÉS
+══════════════════════════════════ */
+function todayISO() {
+  const now = new Date();
+  return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+}
+function frenchDateLabel(iso) {
+  const parts = iso.split('-').map(Number);
+  const d = new Date(parts[0], parts[1]-1, parts[2]);
+  return RH_WEEKDAYS_FR[d.getDay()] + ' ' + parts[2] + ' ' + RH_MONTHS_FR[parts[1]-1] + ' ' + parts[0];
+}
+function rhSplitSentences(text) {
+  if (!text) return [];
+  // Le guillemet/parenthèse fermant(e) éventuel(le) fait partie de la phrase
+  // qui précède : on le garde au lieu de le faire disparaître dans le
+  // séparateur (miroir du correctif appliqué dans rhapsodyParser.js).
+  return text.split(/(?<=[.!?…]|[.!?…][»"”')])\s+(?=[A-ZÀ-Þ«"„])/).map(s => s.trim()).filter(Boolean);
+}
+function rhGroupPhases(sentences, per) {
+  per = Math.max(1, per || 2);
+  const out = [];
+  for (let i = 0; i < sentences.length; i += per) out.push(sentences.slice(i, i+per).join(' '));
+  return out;
+}
+function rhBuildPhases(day, per, includeTitle, includePrayer) {
+  const phases = [];
+  if (includeTitle && day.title) phases.push(day.title);
+  if (day.verse) phases.push(day.verse + (day.verseRef ? '\n(' + day.verseRef + ')' : ''));
+  rhGroupPhases(rhSplitSentences(day.body), per).forEach(p => phases.push(p));
+  if (includePrayer && day.prayer) phases.push((day.prayerLabel || 'PRIÈRE') + '\n\n' + day.prayer);
+  return phases;
+}
+function setRhStatus(kind, text) {
+  const el = document.getElementById('rhStatus');
+  el.className = 'status-line' + (kind ? ' ' + kind : '');
+  document.getElementById('rhStatusText').textContent = text;
+}
+function rhOpts() {
+  return {
+    per: parseInt(document.getElementById('rhPerPhase').value, 10) || settings.sentencesPerPhase || 2,
+    includeTitle: document.getElementById('rhIncludeTitle').checked,
+    includePrayer: document.getElementById('rhIncludePrayer').checked,
+  };
+}
+
+async function importRhapsodyPdf() {
+  const lang = document.getElementById('rhLangSelect').value || null;
+  setRhStatus('warn', 'Import en cours…');
+  try {
+    const res = await window.api.rhapsody.importPdf(lang);
+    if (res.canceled) { await refreshRhStatus(); return; }
+    rh.monthData = res.data;
+    populateRhDaySelect();
+    document.getElementById('rhBrowseCard').style.display = 'flex';
+    const todayEntry = rh.monthData.days.find(d => d.date === todayISO());
+    selectRhDay(todayEntry ? todayEntry.date : rh.monthData.days[0].date);
+    setRhStatus('ok', `${rh.monthData.monthLabel} ${rh.monthData.year} importé (${rh.monthData.lang === 'en' ? 'anglais' : 'français'}) — ${rh.monthData.days.length} jours.`);
+    await refreshRhMonthList();
+  } catch (err) {
+    setRhStatus('err', "Échec de l'import : " + (err && err.message ? err.message : err));
+  }
+}
+
+function populateRhDaySelect() {
+  const sel = document.getElementById('rhDaySelect');
+  sel.innerHTML = rh.monthData.days.map(d => `<option value="${d.date}">${String(d.day).padStart(2,'0')} — ${esc(d.title)}</option>`).join('');
+}
+function selectRhDay(iso) {
+  rh.selectedDate = iso;
+  document.getElementById('rhDaySelect').value = iso;
+  renderRhPreview();
+}
+function onRhDaySelected() { selectRhDay(document.getElementById('rhDaySelect').value); }
+function onRhPerPhaseChange(el) {
+  document.getElementById('rhPerPhaseVal').textContent = el.value;
+  settings.sentencesPerPhase = parseInt(el.value, 10);
+  window.api.settings.set(settings);
+  renderRhPreview();
+}
+function onRhOptionsChange() { renderRhPreview(); }
+
+function renderRhPreview() {
+  if (!rh.monthData || !rh.selectedDate) return;
+  const day = rh.monthData.days.find(d => d.date === rh.selectedDate);
+  if (!day) return;
+  const { per, includeTitle, includePrayer } = rhOpts();
+  const phases = rhBuildPhases(day, per, includeTitle, includePrayer);
+  document.getElementById('rhPreview').innerHTML =
+    `<div style="font-weight:700;color:var(--accent)">${esc(day.title)}</div>` +
+    `<div style="font-style:italic;color:var(--text-dim)">« ${esc(day.verse)} »</div>` +
+    `<div style="color:var(--muted)">${frenchDateLabel(day.date)} · ${phases.length} diapositives</div>`;
+}
+function sendRhapsodyToProjection() {
+  if (!rh.monthData || !rh.selectedDate) return;
+  const day = rh.monthData.days.find(d => d.date === rh.selectedDate);
+  if (!day) return;
+  const { per, includeTitle, includePrayer } = rhOpts();
+  const phases = rhBuildPhases(day, per, includeTitle, includePrayer);
+  loadRhapsodyProgram(phases, 'Rhapsodie — ' + frenchDateLabel(day.date));
+  showTab('projection');
+  toast('Rhapsodie envoyée à la projection');
+}
+
+async function refreshRhMonthList() {
+  rh.months = await window.api.rhapsody.listMonths();
+  const el = document.getElementById('rhMonthList');
+  el.innerHTML = rh.months.length
+    ? rh.months.map(m => `<span class="chip" style="cursor:default;display:inline-block;margin:3px">${m}</span>`).join('')
+    : 'Aucun mois importé pour le moment.';
+}
+
+let rhSearchTimer = null;
+function onRhSearch(q) {
+  clearTimeout(rhSearchTimer);
+  rhSearchTimer = setTimeout(async () => {
+    const query = q.trim();
+    const el = document.getElementById('rhSearchResults');
+    if (!query) { el.innerHTML = ''; return; }
+    const results = await window.api.rhapsody.search(query);
+    if (!results.length) { el.innerHTML = `<div class="empty-hint">Aucun résultat</div>`; return; }
+    el.innerHTML = results.map(r => `<div class="rh-result" onclick="openRhResult('${r.monthKey}','${r.date}')">
+      <div class="rr-date">${frenchDateLabel(r.date)}</div>
+      <div class="rr-title">${esc(r.title)}</div>
+      <div class="rr-verse">« ${esc((r.verse||'').slice(0,110))}${(r.verse||'').length>110?'…':''} »</div>
+    </div>`).join('');
+  }, 300);
+}
+async function openRhResult(monthKey, date) {
+  const res = await window.api.rhapsody.getMonth(monthKey);
+  if (!res.found) return;
+  rh.monthData = res.data;
+  populateRhDaySelect();
+  document.getElementById('rhBrowseCard').style.display = 'flex';
+  selectRhDay(date);
+}
+
+async function refreshRhStatus() {
+  settings = await window.api.settings.get();
+  document.getElementById('rhPerPhase').value = settings.sentencesPerPhase || 2;
+  document.getElementById('rhPerPhaseVal').textContent = settings.sentencesPerPhase || 2;
+  await refreshRhMonthList();
+  try {
+    const res = await window.api.rhapsody.getToday();
+    if (!res.monthAvailable) { setRhStatus('warn', `Aucun PDF importé pour ${frenchDateLabel(res.date)}. Importez le PDF du mois ci-dessus.`); return; }
+    const monthRes = await window.api.rhapsody.getMonth(res.monthKey);
+    if (monthRes.found) { rh.monthData = monthRes.data; populateRhDaySelect(); document.getElementById('rhBrowseCard').style.display = 'flex'; }
+    if (!res.day) { setRhStatus('warn', `Le mois est importé, mais aucune entrée ne correspond à aujourd'hui (${frenchDateLabel(res.date)}).`); return; }
+    selectRhDay(res.day.date);
+    setRhStatus('ok', `Rhapsodie du ${frenchDateLabel(res.day.date)} prête : « ${res.day.title} ».`);
+  } catch (err) {
+    setRhStatus('err', 'Erreur : ' + (err && err.message ? err.message : err));
+  }
+}
+
+/* ══════════════════════════════════
+   SAUVEGARDE
+══════════════════════════════════ */
+async function backupExport() {
+  const res = await window.api.backup.export();
+  if (!res.canceled) toast('Sauvegarde exportée');
+}
+async function backupImport() {
+  const res = await window.api.backup.import();
+  if (res.canceled) return;
+  library = await window.api.library.getAll();
+  settings = await window.api.settings.get();
+  renderFolderChips(); renderLibraryList(); populateFolderSelect(); applyAppearanceFormFromSettings(); updateProgramUI();
+  toast('Sauvegarde importée');
+}
+
+init();
+</script>
+</body>
+</html>
